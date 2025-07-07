@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5StarParenting - Practice Your Challenges</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-parenting-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+
+        const initFirebase = async () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        if (initialAuthToken) {
+                            try {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                                userId = auth.currentUser.uid;
+                            } catch (error) {
+                                console.error("Firebase Auth Error with custom token:", error);
+                                await signInAnonymously(auth);
+                                userId = auth.currentUser.uid;
+                            }
+                        } else {
+                            await signInAnonymously(auth);
+                            userId = auth.currentUser.uid;
+                        }
+                    }
+                    isAuthReady = true;
+                    document.dispatchEvent(new CustomEvent('firebaseReady'));
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                document.dispatchEvent(new CustomEvent('firebaseError'));
+            }
+        };
+
+        initFirebase();
+
+        window.app = app;
+        window.db = db;
+        window.auth = auth;
+        window.getUserId = () => userId;
+        window.isFirebaseReady = () => isAuthReady;
+        window.addDoc = addDoc;
+        window.collection = collection;
+        window.appId = appId;
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F8F8;
+            scroll-behavior: smooth;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .nav-link.active {
+            border-bottom: 2px solid #A78BFA;
+            font-weight: 600;
+            color: #EDE9FE;
+        }
+        .section-title {
+            color: #4B5563;
+        }
+        .text-primary {
+            color: #3B82F6;
+        }
+        .text-secondary {
+            color: #6D28D9;
+        }
+        .bg-gradient-header {
+            background-image: linear-gradient(to right, #3B82F6, #6D28D9);
+        }
+        .bg-card {
+            background-color: #FFFFFF;
+        }
+        .border-card {
+            border-color: #E5E7EB;
+        }
+        .child-message-container {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .child-avatar-small {
+            font-size: 2rem;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body class="text-gray-800 leading-relaxed">
+    <!-- Chosen Palette: Warm Neutrals with Blue and Purple Accents -->
+    <!-- Application Structure Plan: The SPA is structured into thematic sections accessible via a top navigation bar: Overview, Core Feature (MVP), Key Features, Tech & Flow, Monetization, and Ethics. This linear, section-based approach allows users to progressively understand the app's specification. The "Core Feature" section is designed to be the most interactive, allowing users to simulate the primary functionality of the MVP by inputting a challenge, engaging in a mock AI chat, and receiving feedback. This structure was chosen for usability and clarity, enabling users to explore the app's concept, functionality, and underlying principles in a logical and engaging manner, rather than mirroring the original report's sequential document format. -->
+    <!-- Visualization & Content Choices:
+    - Overview, Target Audience: Textual presentation for clear understanding. Goal: Inform. Method: HTML text. Interaction: None. Justification: Best for conveying foundational information directly.
+    - Core Feature (MVP) - Custom Scenario Creator: Interactive simulation. Goal: Demonstrate core functionality. Method: HTML form elements, dynamic text updates via JS. Interaction: User input, button click, dynamic text display. Justification: Provides a direct, hands-on experience of the app's primary value.
+    - Key Features & Ethical Considerations: Accordion/toggle lists. Goal: Inform about benefits and principles. Method: HTML list, JS toggle. Interaction: Click to expand/collapse. Justification: Allows users to explore details at their own pace without being overwhelmed.
+    - Technical & User Flow: Textual list for tech stack, HTML/CSS boxes with arrows for user flow diagram. Goal: Explain underlying technology and user journey. Method: HTML list, HTML/CSS diagram. Interaction: None. Justification: Clear and concise presentation of technical aspects and user experience steps.
+    - Monetization: Textual explanation of freemium model and a Chart.js bar chart. Goal: Inform about business model. Method: HTML text, Chart.js canvas. Interaction: None on chart (illustrative). Justification: Visually represents the value proposition of premium tiers.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <header class="bg-gradient-header text-white p-4 shadow-lg sticky top-0 z-40">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center">
+            <h1 class="text-3xl font-bold mb-4 md:mb-0">5StarParenting</h1>
+            <nav>
+                <ul class="flex space-x-4 md:space-x-6">
+                    <li><a href="#overview" class="nav-link text-lg p-2 hover:text-purple-200 transition duration-200">Overview</a></li>
+                    <li><a href="#core-feature" class="nav-link text-lg p-2 hover:text-purple-200 transition duration-200">Core Feature</a></li>
+                    <li><a href="#key-features" class="nav-link text-lg p-2 hover:text-purple-200 transition duration-200">Features</a></li>
+                    <li><a href="#tech-flow" class="nav-link text-lg p-2 hover:text-purple-200 transition duration-200">Tech & Flow</a></li>
+                    <li><a href="#monetization" class="nav-link text-lg p-2 hover:text-purple-200 transition duration-200">Monetization</a></li>
+                    <li><a href="#ethics" class="nav-link text-lg p-2 hover:text-purple-200 transition duration-200">Ethics</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+
+        <section id="overview" class="mb-12 p-8 bg-card rounded-lg shadow-md border-card border">
+            <h2 class="text-4xl font-bold section-title mb-6 text-center">Overview: App Specification</h2>
+            <p class="text-lg text-gray-700 mb-6">
+                5StarParenting is an interactive mobile and web application designed to empower Indian parents. It leverages cutting-edge AI to create personalized role-playing scenarios based on specific parenting challenges they face. This safe, simulated environment allows parents to practice navigating complex child psychology and parenting situations, receiving real-time, AI-driven feedback and actionable insights to develop effective communication and behavioral management skills. This section introduces the core concept and its intended audience.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-2xl font-semibold text-primary mb-3">App Concept</h3>
+                    <p class="text-gray-700">
+                        The app's core concept is to provide a practical, hands-on learning experience for parents. Instead of just reading advice, they can actively practice conversations and responses to common (and unique) child-rearing dilemmas. The AI acts as a dynamic simulator, reacting realistically to parent inputs, and then providing constructive feedback grounded in child psychology principles. This approach aims to build parental confidence and competence in addressing their children's emotional and behavioral needs.
+                    </p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-semibold text-primary mb-3">Target Audience</h3>
+                    <ul class="list-disc list-inside text-gray-700 space-y-2">
+                        <li><strong>Primary:</strong> Indian parents of children aged 2-18 years seeking practical guidance and skill development.</li>
+                        <li><strong>Secondary:</strong> Educators, caregivers, or aspiring parents interested in understanding child behavior.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="core-feature" class="mb-12 p-8 bg-card rounded-lg shadow-md border-card border">
+            <h2 class="text-4xl font-bold section-title mb-6 text-center">Core Feature (MVP): Custom Scenario Simulation</h2>
+            <p class="text-lg text-gray-700 mb-6">
+                The Minimal Viable Product (MVP) of 5StarParenting centers entirely on the "Custom Scenario Creator." This section demonstrates how parents can input their unique challenges, engage in a simulated conversation with an AI-driven child, and receive immediate, actionable feedback to refine their parenting approach. This feature is designed to be highly personalized and directly address the specific needs of each parent.
+            </p>
+
+            <div class="max-w-3xl mx-auto">
+                <h3 class="text-2xl font-semibold text-primary mb-4">Describe Your Parenting Challenge</h3>
+                <textarea id="challengeInput" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" rows="4" placeholder="E.g., 'My 10-year-old is spending too much time on video games and ignoring studies. How do I talk to them?'"></textarea>
+                <button id="generateScenarioBtn" class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition duration-200 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    Generate Scenario
+                </button>
+                <p id="generationStatus" class="text-center text-gray-600 mt-3 hidden">Generating scenario...</p>
+                <p id="generationError" class="text-center text-red-500 mt-3 hidden">Error generating scenario.</p>
+            </div>
+
+            <div id="scenarioPlayer" class="mt-8 hidden">
+                <h3 class="text-2xl font-semibold text-primary mb-4" id="scenarioTitle"></h3>
+                <p class="text-gray-700 mb-6" id="scenarioDescription"></p>
+
+                <div class="flex flex-col items-center mb-4">
+                    <div id="childAvatar" class="text-6xl mb-2">😊</div>
+                    <span class="text-xl font-semibold text-gray-700">Your Child</span>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 h-96 overflow-y-auto bg-gray-50 mb-4 flex flex-col space-y-3" id="chatWindow"></div>
+
+                <div class="flex items-center space-x-2">
+                    <button id="toggleVoiceBtn" class="p-3 bg-gray-200 rounded-full text-2xl hover:bg-gray-300 transition duration-200" title="Toggle AI Voice">🔊</button>
+                    <button id="startVoiceInputBtn" class="p-3 bg-gray-200 rounded-full text-2xl hover:bg-gray-300 transition duration-200" title="Start Voice Input">🎙️</button>
+                    <input type="text" id="parentResponseInput" placeholder="Type or speak your response..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="sendResponseBtn" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Send
+                    </button>
+                </div>
+                <p id="chatStatus" class="text-center text-gray-600 mt-3 hidden">AI is thinking...</p>
+                <p id="chatError" class="text-center text-red-500 mt-3 hidden">Error during chat simulation.</p>
+
+                <div class="flex justify-end mt-4">
+                    <button id="endScenarioBtn" class="px-6 py-3 bg-purple-600 text-white rounded-lg shadow-md hover:bg-purple-700 transition duration-200 text-lg font-semibold hidden">
+                        End Scenario & Get Feedback
+                    </button>
+                </div>
+            </div>
+
+            <div id="feedbackModal" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50 hidden">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-lg lg:max-w-xl p-6 relative">
+                    <div class="flex justify-between items-center border-b pb-3 mb-4">
+                        <h2 class="text-xl font-semibold text-gray-800">Scenario Feedback</h2>
+                        <button id="closeFeedbackModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl" aria-label="Close feedback">&times;</button>
+                    </div>
+                    <div class="text-gray-700 max-h-[70vh] overflow-y-auto pr-2" id="feedbackContent">
+                        <!-- Feedback content will be dynamically inserted here -->
+                        <div id="feedbackSummary" class="mb-4 p-3 bg-blue-50 rounded-lg">
+                            <h3 class="font-semibold text-blue-800 text-lg mb-2">Summary ✨</h3>
+                            <p></p>
+                        </div>
+                        <div id="feedbackStrengths" class="mb-4 p-3 bg-green-50 rounded-lg">
+                            <h3 class="font-semibold text-green-800 text-lg mb-2">Strengths ✅</h3>
+                            <ul class="list-disc list-inside"></ul>
+                        </div>
+                        <div id="feedbackAreasForGrowth" class="mb-4 p-3 bg-red-50 rounded-lg">
+                            <h3 class="font-semibold text-red-800 text-lg mb-2">Areas for Growth 📈</h3>
+                            <ul class="list-disc list-inside"></ul>
+                        </div>
+                        <div id="feedbackActionableTips" class="p-3 bg-yellow-50 rounded-lg">
+                            <h3 class="font-semibold text-yellow-800 text-lg mb-2">Actionable Tips 💡</h3>
+                            <ul class="list-disc list-inside"></ul>
+                        </div>
+                    </div>
+                    <div class="flex justify-end mt-4">
+                        <button id="restartScenarioBtn" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200">
+                            Practice Another Scenario
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="key-features" class="mb-12 p-8 bg-card rounded-lg shadow-md border-card border">
+            <h2 class="text-4xl font-bold section-title mb-6 text-center">Key App Features</h2>
+            <p class="text-lg text-gray-700 mb-6">
+                Beyond the core simulation, 5StarParenting offers several key features designed to attract and retain Indian parents, ensuring a valuable and engaging user experience. This section highlights the unique selling points that make the app stand out. Toggle each feature to learn more.
+            </p>
+            <div class="space-y-4" id="accordionContainer"></div>
+        </section>
+
+        <section id="tech-flow" class="mb-12 p-8 bg-card rounded-lg shadow-md border-card border">
+            <h2 class="text-4xl font-bold section-title mb-6 text-center">Technical Stack & User Flow</h2>
+            <p class="text-lg text-gray-700 mb-6">
+                This section outlines the foundational technologies powering 5StarParenting and details the streamlined user journey for the MVP, focusing on the custom scenario creation and simulation process. Understanding these elements provides insight into the app's robust architecture and intuitive design.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-2xl font-semibold text-primary mb-3">Technology Stack</h3>
+                    <ul class="list-disc list-inside text-gray-700 space-y-2">
+                        <li><strong>Frontend:</strong> React (for web) - Chosen for component-based development, performance, and maintainability.</li>
+                        <li><strong>Styling:</strong> Tailwind CSS - Provides utility-first classes for rapid, responsive, and consistent UI development.</li>
+                        <li><strong>Backend/Database:</strong> Google Firebase (Firestore for flexible, scalable NoSQL database; Authentication for secure user management) - Offers a robust, serverless backend solution.</li>
+                        <li><strong>AI Engine:</strong> Google Gemini API - Powers the Large Language Model (LLM) interactions, including custom scenario generation, dynamic child responses, and real-time feedback analysis.</li>
+                        <li><strong>Hosting:</strong> Firebase Hosting or similar cloud hosting - Ensures reliable and scalable deployment.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-semibold text-primary mb-3">User Flow (MVP Focus)</h3>
+                    <div class="flex flex-col items-center space-y-4 text-center text-gray-700">
+                        <div class="p-4 bg-blue-100 rounded-lg shadow-sm w-full max-w-xs">1. Onboarding & Disclaimer</div>
+                        <span class="text-2xl text-primary">↓</span>
+                        <div class="p-4 bg-blue-100 rounded-lg shadow-sm w-full max-w-xs">2. Custom Scenario Creation</div>
+                        <span class="text-2xl text-primary">↓</span>
+                        <div class="p-4 bg-blue-100 rounded-lg shadow-sm w-full max-w-xs">3. AI Generates Scenario</div>
+                        <span class="text-2xl text-primary">↓</span>
+                        <div class="p-4 bg-blue-100 rounded-lg shadow-sm w-full max-w-xs">4. Role-Playing Simulation</div>
+                        <span class="text-2xl text-primary">↓</span>
+                        <div class="p-4 bg-blue-100 rounded-lg shadow-sm w-full max-w-xs">5. Post-Scenario Review</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="monetization" class="mb-12 p-8 bg-card rounded-lg shadow-md border-card border">
+            <h2 class="text-4xl font-bold section-title mb-6 text-center">Monetization Strategy</h2>
+            <p class="text-lg text-gray-700 mb-6">
+                The monetization strategy for 5StarParenting's MVP is centered around a clear freemium model, designed to attract a broad user base while offering compelling value for premium subscribers. This approach allows for initial user acquisition and validation, with clear pathways for revenue generation. The chart below illustrates the conceptual feature access for free versus premium tiers.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div>
+                    <h3 class="text-2xl font-semibold text-primary mb-3">Freemium Model Breakdown</h3>
+                    <ul class="list-disc list-inside text-gray-700 space-y-2">
+                        <li><strong>Free Tier:</strong> Users get access to a very limited number of custom scenario generations (e.g., 1-2 per month) with basic AI feedback. This allows users to experience the core value proposition.</li>
+                        <li><strong>Premium Subscription (Monthly/Annual):</strong> Unlocks unlimited custom scenario generation, unlimited AI interactions, and advanced, detailed feedback. This tier provides the full, unrestricted practice experience.</li>
+                        <li><strong>Ad-free Experience:</strong> Premium subscribers also benefit from an ad-free environment, enhancing their focus and experience.</li>
+                        <li><strong>Future Expansion:</strong> Access to exclusive premium content (expert videos, in-depth guides, downloadable worksheets) would be added to premium tiers, along with priority access to new features as the app develops.</li>
+                    </ul>
+                </div>
+                <div class="chart-container">
+                    <canvas id="monetizationChart"></canvas>
+                </div>
+            </div>
+            <div class="mt-8">
+                <h3 class="text-2xl font-semibold text-primary mb-3">B2B Licensing (Future Expansion)</h3>
+                <p class="text-gray-700">
+                    Beyond direct-to-consumer subscriptions, a significant future revenue stream will involve offering the platform as a licensed solution to schools, corporate wellness programs, or NGOs. These organizations can then provide parenting support to their communities, focusing on the custom scenario feature. This B2B model offers a scalable path for passive income.
+                </p>
+            </div>
+        </section>
+
+        <section id="ethics" class="mb-12 p-8 bg-card rounded-lg shadow-md border-card border">
+            <h2 class="text-4xl font-bold section-title mb-6 text-center">Ethical Considerations</h2>
+            <p class="text-lg text-gray-700 mb-6">
+                Given the sensitive nature of child psychology and parental guidance, ethical considerations are paramount for 5StarParenting. This section outlines the core principles and measures taken to ensure trust, safety, and compliance with regulations, particularly relevant to the Indian context. Toggle each point to understand our commitment.
+            </p>
+             <div class="space-y-4" id="ethicsAccordionContainer"></div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white p-6 text-center text-sm rounded-t-xl">
+        <div class="container mx-auto">
+            <p>&copy; 2025 5StarParenting. All rights reserved.</p>
+            <p class="mt-2 text-gray-400">
+                Disclaimer: This app is a simulation tool for parents and does not provide professional diagnosis or therapy. For serious concerns, please consult a qualified human professional.
+            </p>
+            <p class="mt-1 text-red-400">Emergency Helpline: <a href="tel:+919999999999" class="underline hover:text-red-300">+91-9999999999</a></p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('nav a');
+
+            const options = {
+                rootMargin: '-50% 0px -50% 0px',
+                threshold: 0
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.getAttribute('id');
+                        navLinks.forEach(link => {
+                            link.classList.remove('active');
+                            if (link.getAttribute('href') === `#${id}`) {
+                                link.classList.add('active');
+                            }
+                        });
+                    }
+                });
+            }, options);
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+
+            const accordionData = {
+                'key-features': [
+                    { title: "Personalized Challenge Practice", content: "The app's unique selling proposition: parents can practice *their own specific* parenting challenges, making the app highly relevant and valuable to their individual needs." },
+                    { title: "Immersive & Realistic Simulations", content: "High-quality, engaging scenarios that feel authentic to Indian parenting contexts, even when custom-generated. The AI's responses are designed to be nuanced and believable." },
+                    { title: "Bilingual/Multi-lingual Support", content: "Offering the app interface and AI interactions in English and key Indian languages to ensure broad accessibility and cultural comfort." },
+                    { title: "Expert-Vetted AI Logic", content: "Emphasizing that the AI's feedback mechanisms are reviewed by certified child psychologists specializing in the Indian context, building trust and credibility." },
+                    { title: "Actionable Feedback", content: "Real-time, constructive suggestions that parents can immediately understand and apply to their real-life interactions." },
+                    { title: "User-Friendly Interface", content: "An intuitive, clean, and mobile-first design ensures easy accessibility and a pleasant user experience for busy parents." },
+                    { title: "Emergency Protocol & Disclaimers", content: "Clear, prominent disclaimers and easy access to emergency helplines, prioritizing user safety and ethical responsibility." }
+                ],
+                'ethics': [
+                    { title: "Clear Disclaimers", content: "Prominently displaying that the app is a simulation and learning tool, not a substitute for professional help, and providing emergency contacts." },
+                    { title: "Data Privacy & Security", content: "Strict compliance with India's Digital Personal Data Protection Act (DPDP Act, 2023), including verifiable parental consent, data anonymization, and encryption." },
+                    { title: "Human Oversight & Expert Vetting", content: "A panel of certified child psychologists regularly reviews the AI's logic, responses, and feedback to ensure accuracy, safety, and ethical alignment." },
+                    { title: "Bias Mitigation", content: "Active efforts to identify and mitigate biases in AI models related to gender, socio-economic status, or cultural backgrounds within India." },
+                    { title: "No Diagnostic Claims", content: "The AI will never make direct diagnostic statements. Its role is strictly limited to providing observations and suggesting when professional help might be beneficial." },
+                    { title: "Age Appropriateness", content: "Ensuring all content, scenarios, and AI interactions are developmentally appropriate for the specified child age groups." }
+                ]
+            };
+
+            function createAccordion(containerId, data) {
+                const container = document.getElementById(containerId);
+                data.forEach((item, index) => {
+                    const accordionItem = document.createElement('div');
+                    accordionItem.className = 'bg-gray-50 p-4 rounded-lg border border-gray-200';
+                    accordionItem.innerHTML = `
+                        <button class="flex justify-between items-center w-full text-left font-semibold text-xl text-secondary accordion-toggle">
+                            <span>${index + 1}. ${item.title}</span>
+                            <span class="text-2xl accordion-icon">+</span>
+                        </button>
+                        <div class="mt-2 text-gray-700 hidden accordion-content">
+                            ${item.content}
+                        </div>
+                    `;
+                    container.appendChild(accordionItem);
+                });
+            }
+
+            createAccordion('accordionContainer', accordionData['key-features']);
+            createAccordion('ethicsAccordionContainer', accordionData['ethics']);
+
+            document.querySelectorAll('.accordion-toggle').forEach(button => {
+                button.addEventListener('click', () => {
+                    const content = button.nextElementSibling;
+                    const icon = button.querySelector('.accordion-icon');
+                    content.classList.toggle('hidden');
+                    icon.textContent = content.classList.contains('hidden') ? '+' : '−';
+                });
+            });
+
+            const ctx = document.getElementById('monetizationChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Free Tier (Limited)', 'Premium Subscription (Unlimited)'],
+                    datasets: [{
+                        label: 'Features Access',
+                        data: [30, 100],
+                        backgroundColor: ['rgba(108, 117, 125, 0.6)', 'rgba(109, 40, 217, 0.8)'],
+                        borderColor: ['rgba(108, 117, 125, 1)', 'rgba(109, 40, 217, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Feature Access (%)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    const label = this.getLabelForValue(value);
+                                    const maxLen = 16;
+                                    if (label.length > maxLen) {
+                                        return label.split(' ').map((word, i, arr) => {
+                                            if (word.length > maxLen) return word.match(new RegExp('.{1,' + maxLen + '}', 'g'));
+                                            return word;
+                                        }).flat();
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y}%` } }
+                    }
+                }
+            });
+
+            const challengeInput = document.getElementById('challengeInput');
+            const generateScenarioBtn = document.getElementById('generateScenarioBtn');
+            const generationStatus = document.getElementById('generationStatus');
+            const generationError = document.getElementById('generationError');
+            const scenarioPlayer = document.getElementById('scenarioPlayer');
+            const scenarioTitle = document.getElementById('scenarioTitle');
+            const scenarioDescription = document.getElementById('scenarioDescription');
+            const chatWindow = document.getElementById('chatWindow');
+            const parentResponseInput = document.getElementById('parentResponseInput');
+            const sendResponseBtn = document.getElementById('sendResponseBtn');
+            const chatStatus = document.getElementById('chatStatus');
+            const chatError = document.getElementById('chatError');
+            const endScenarioBtn = document.getElementById('endScenarioBtn'); 
+            const feedbackModal = document.getElementById('feedbackModal');
+            const closeFeedbackModalBtn = document.getElementById('closeFeedbackModalBtn');
+            const feedbackSummary = document.querySelector('#feedbackSummary p');
+            const feedbackStrengthsList = document.querySelector('#feedbackStrengths ul');
+            const feedbackAreasForGrowthList = document.querySelector('#feedbackAreasForGrowth ul');
+            const feedbackActionableTipsList = document.querySelector('#feedbackActionableTips ul');
+            const restartScenarioBtn = document.getElementById('restartScenarioBtn');
+            const childAvatar = document.getElementById('childAvatar');
+            const toggleVoiceBtn = document.getElementById('toggleVoiceBtn');
+            const startVoiceInputBtn = document.getElementById('startVoiceInputBtn');
+
+            let currentScenario = null;
+            let interactions = [];
+            let currentTurn = 0;
+            const maxTurns = 3;
+            let isVoiceOutputEnabled = true;
+            let recognition;
+            let isListening = false;
+
+            toggleVoiceBtn.textContent = isVoiceOutputEnabled ? '🔊' : '🔇';
+
+            const getChildEmoji = (text) => {
+                const lowerText = text.toLowerCase();
+                if (lowerText.includes('happy') || lowerText.includes('great') || lowerText.includes('yay') || lowerText.includes('good')) return '😊';
+                if (lowerText.includes('sad') || lowerText.includes('unhappy') || lowerText.includes('cry') || lowerText.includes('upset')) return '😔';
+                if (lowerText.includes('angry') || lowerText.includes('mad') || lowerText.includes('frustrated') || lowerText.includes('no!')) return '😠';
+                if (lowerText.includes('confused') || lowerText.includes('don\'t understand')) return '🤔';
+                if (lowerText.includes('why') || lowerText.includes('but')) return '🤨';
+                return '😐';
+            };
+
+            const appendMessage = (role, text) => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `p-3 rounded-lg max-w-[80%] ${role === 'parent' ? 'bg-blue-100 text-right ml-auto' : 'bg-gray-100 text-left mr-auto'}`;
+                
+                if (role === 'child') {
+                    const emoji = getChildEmoji(text);
+                    messageDiv.classList.add('child-message-container');
+                    messageDiv.innerHTML = `
+                        <span class="child-avatar-small">${emoji}</span>
+                        <div class="flex-grow">
+                            <span class="font-semibold capitalize text-sm block mb-1">Child</span> ${text}
+                            <button class="ml-2 text-gray-500 hover:text-gray-700 text-lg play-child-voice" data-text="${text}">▶️</button>
+                        </div>
+                    `;
+                    if (isVoiceOutputEnabled) {
+                        speakText(text);
+                    }
+                } else {
+                    messageDiv.innerHTML = `<span class="font-semibold capitalize text-sm block mb-1">${role}</span> ${text}`;
+                }
+                
+                chatWindow.appendChild(messageDiv);
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+
+                if (role === 'child') {
+                    childAvatar.textContent = getChildEmoji(text);
+                }
+            };
+
+            const speakText = (text) => {
+                if (!('speechSynthesis' in window)) {
+                    console.warn("Text-to-speech not supported in this browser.");
+                    return;
+                }
+                if (!isVoiceOutputEnabled) {
+                    return;
+                }
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-IN';
+
+                const age = parseInt(currentScenario?.childAge);
+                if (!isNaN(age)) {
+                    if (age <= 7) {
+                        utterance.pitch = 1.3;
+                        utterance.rate = 1.1;
+                    } else if (age <= 12) {
+                        utterance.pitch = 1.1;
+                        utterance.rate = 1.05;
+                    } else {
+                        utterance.pitch = 1.0;
+                        utterance.rate = 1.0;
+                    }
+                } else {
+                    utterance.pitch = 1.0;
+                    utterance.rate = 1.0;
+                }
+                
+                window.speechSynthesis.speak(utterance);
+            };
+
+            toggleVoiceBtn.addEventListener('click', () => {
+                isVoiceOutputEnabled = !isVoiceOutputEnabled;
+                toggleVoiceBtn.textContent = isVoiceOutputEnabled ? '🔊' : '🔇';
+                if (!isVoiceOutputEnabled) {
+                    window.speechSynthesis.cancel();
+                }
+            });
+
+            chatWindow.addEventListener('click', (event) => {
+                if (event.target.classList.contains('play-child-voice')) {
+                    const textToSpeak = event.target.dataset.text;
+                    if (textToSpeak) {
+                        speakText(textToSpeak);
+                    }
+                }
+            });
+
+            if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.lang = 'en-IN';
+
+                recognition.onstart = () => {
+                    isListening = true;
+                    startVoiceInputBtn.textContent = '🟥';
+                    parentResponseInput.placeholder = "Listening...";
+                    parentResponseInput.disabled = true;
+                    sendResponseBtn.disabled = true;
+                };
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    parentResponseInput.value = transcript;
+                    isListening = false;
+                    startVoiceInputBtn.textContent = '🎙️';
+                    parentResponseInput.placeholder = "Type or speak your response...";
+                    parentResponseInput.disabled = false;
+                    sendResponseBtn.disabled = false;
+                    handleSendResponse();
+                };
+
+                recognition.onerror = (event) => {
+                    console.error("Speech recognition error:", event.error);
+                    chatError.textContent = `Voice input error: ${event.error}. Try typing.`;
+                    chatError.classList.remove('hidden');
+                    isListening = false;
+                    startVoiceInputBtn.textContent = '🎙️';
+                    parentResponseInput.placeholder = "Type or speak your response...";
+                    parentResponseInput.disabled = false;
+                    sendResponseBtn.disabled = false;
+                };
+
+                recognition.onend = () => {
+                    isListening = false;
+                    startVoiceInputBtn.textContent = '🎙️';
+                    parentResponseInput.placeholder = "Type or speak your response...";
+                    parentResponseInput.disabled = false;
+                    sendResponseBtn.disabled = false;
+                };
+
+                startVoiceInputBtn.addEventListener('click', () => {
+                    if (isListening) {
+                        recognition.stop();
+                    } else {
+                        recognition.start();
+                    }
+                });
+            } else {
+                startVoiceInputBtn.style.display = 'none';
+                parentResponseInput.placeholder = "Voice input not supported. Please type.";
+                console.warn("Web Speech API (SpeechRecognition) not supported in this browser.");
+            }
+
+            const callGeminiAPI = async (prompt, schema = null) => {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                try {
+                    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                    const payload = { contents: chatHistory };
+
+                    if (schema) {
+                        payload.generationConfig = {
+                            responseMimeType: "application/json",
+                            responseSchema: schema
+                        };
+                    }
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(`Gemini API HTTP error! Status: ${response.status}, Body: ${errorText}`);
+                        if (response.status === 401) {
+                            console.warn("API Key Unauthorized (401). Please ensure your API key is correct and enabled for Gemini API. Falling back to mock data.");
+                        }
+                        throw new Error(`API call failed with status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        if (schema) {
+                            try {
+                                return JSON.parse(text);
+                            } catch (e) {
+                                console.error("JSON parsing error for schema response:", e, "Raw text:", text);
+                                throw new Error("Invalid JSON response from AI for schema.");
+                            }
+                        }
+                        return text;
+                    } else {
+                        throw new Error("AI response structure unexpected or content missing.");
+                    }
+                } catch (err) {
+                    console.error("Error calling Gemini API:", err);
+                    if (prompt.includes("Generate a realistic parenting simulation scenario")) {
+                        return {
+                            name: "Mock Scenario: Screen Time Struggle",
+                            description: "Your 10-year-old is glued to their tablet. Practice how to set boundaries and encourage other activities.",
+                            initialPrompt: "Ugh, Mom/Dad, do I *have* to stop playing now? It's not fair!",
+                            childAge: "10",
+                            issue: "Screen Time"
+                        };
+                    } else if (prompt.includes("How would the child respond naturally and realistically")) {
+                        const lastParentMessage = interactions[interactions.length - 1]?.text.toLowerCase();
+                        if (lastParentMessage.includes("understand") || lastParentMessage.includes("feel")) {
+                            return "Really? You understand? But I just want to play!";
+                        } else if (lastParentMessage.includes("rule") || lastParentMessage.includes("must")) {
+                            return "Ugh, fine. But it's not fair! Everyone else gets to play longer.";
+                        } else if (lastParentMessage.includes("compromise") || lastParentMessage.includes("agree")) {
+                            return "Hmm, okay... maybe a little more time then?";
+                        }
+                        return "I don't know... maybe.";
+                    } else if (prompt.includes("Analyze the following parent-child interaction")) {
+                        return {
+                            summary: "This is mock feedback due to an API error. You handled the situation with varying degrees of empathy and firmness. The child's resistance is typical for their age.",
+                            strengths: ["Attempted to set a boundary.", "Engaged with the child's initial complaint."],
+                            areasForGrowth: ["Could offer more empathy before stating demands.", "Might explore collaborative solutions.", "Consistency in tone."],
+                            actionableTips: ["Validate feelings first: 'I hear you're really enjoying your game.'", "Offer choices: 'Would you like to finish this level in 5 minutes or take a break now and come back later?'", "Use 'I' statements: 'I feel concerned when homework isn't done.'"]
+                        };
+                    }
+                    return null;
+                }
+            };
+
+            generateScenarioBtn.addEventListener('click', async () => {
+                const challenge = challengeInput.value.trim();
+                if (!challenge) {
+                    generationError.textContent = "Please describe your challenge.";
+                    generationError.classList.remove('hidden');
+                    return;
+                }
+
+                generationError.classList.add('hidden');
+                generationStatus.classList.remove('hidden');
+                generateScenarioBtn.disabled = true;
+                parentResponseInput.disabled = true;
+                sendResponseBtn.disabled = true;
+                startVoiceInputBtn.disabled = true;
+
+                const prompt = `Generate a realistic parenting simulation scenario for an Indian parent based on the following challenge: "${challenge}".
+                Provide the output as a JSON object with the following structure:
+                {
+                    "name": "Concise Scenario Title",
+                    "description": "A brief description of the scenario.",
+                    "initialPrompt": "The child's first line of dialogue.",
+                    "childAge": "e.g., 5, 8, 14",
+                    "issue": "e.g., Screen Time, Tantrums, Homework"
+                }
+                Ensure the scenario is culturally relevant to India.`;
+
+                try {
+                    const newScenarioData = await callGeminiAPI(prompt, {
+                        type: "OBJECT",
+                        properties: {
+                            name: { type: "STRING" },
+                            description: { type: "STRING" },
+                            initialPrompt: { type: "STRING" },
+                            childAge: { type: "STRING" },
+                            issue: { type: "STRING" }
+                        }
+                    });
+
+                    if (newScenarioData && newScenarioData.name && newScenarioData.description &&
+                        newScenarioData.initialPrompt && newScenarioData.childAge && newScenarioData.issue) {
+                        currentScenario = { id: `custom-${Date.now()}`, ...newScenarioData };
+                        scenarioTitle.textContent = currentScenario.name;
+                        scenarioDescription.textContent = currentScenario.description;
+                        chatWindow.innerHTML = '';
+                        interactions = [];
+                        currentTurn = 0;
+                        appendMessage('child', currentScenario.initialPrompt);
+                        interactions.push({ role: 'child', text: currentScenario.initialPrompt });
+
+                        scenarioPlayer.classList.remove('hidden');
+                        endScenarioBtn.classList.add('hidden');
+                        parentResponseInput.disabled = false;
+                        sendResponseBtn.disabled = false;
+                        startVoiceInputBtn.disabled = false;
+                        parentResponseInput.focus();
+                    } else {
+                        throw new Error("Failed to generate scenario using AI. Using a default mock scenario.");
+                    }
+                } catch (err) {
+                    console.error("Scenario generation failed:", err);
+                    generationError.textContent = "API call failed. Using a default mock scenario for demonstration.";
+                    generationError.classList.remove('hidden');
+
+                    currentScenario = {
+                        name: "Default Mock Scenario: Playtime vs. Chores",
+                        description: "Your 7-year-old wants to keep playing but needs to do their chores. Practice how to encourage cooperation.",
+                        initialPrompt: "But I don't want to clean my room! I want to play with my toys!",
+                        childAge: "7",
+                        issue: "Chores Resistance"
+                    };
+                    scenarioTitle.textContent = currentScenario.name;
+                    scenarioDescription.textContent = currentScenario.description;
+                    chatWindow.innerHTML = '';
+                    interactions = [];
+                    currentTurn = 0;
+                    appendMessage('child', currentScenario.initialPrompt);
+                    interactions.push({ role: 'child', text: currentScenario.initialPrompt });
+
+                    scenarioPlayer.classList.remove('hidden');
+                    endScenarioBtn.classList.add('hidden');
+                    parentResponseInput.disabled = false;
+                    sendResponseBtn.disabled = false;
+                    startVoiceInputBtn.disabled = false;
+                    parentResponseInput.focus();
+
+                } finally {
+                    generationStatus.classList.add('hidden');
+                    generateScenarioBtn.disabled = false;
+                }
+            });
+
+            const handleSendResponse = async () => {
+                const parentResponse = parentResponseInput.value.trim();
+                if (!parentResponse || !currentScenario) return;
+
+                appendMessage('parent', parentResponse);
+                interactions.push({ role: 'parent', text: parentResponse });
+                parentResponseInput.value = '';
+                sendResponseBtn.disabled = true;
+                parentResponseInput.disabled = true;
+                startVoiceInputBtn.disabled = true;
+                chatStatus.classList.remove('hidden');
+                chatError.classList.add('hidden');
+
+                try {
+                    const conversationHistory = interactions.map(i => `${i.role}: ${i.text}`).join('\n');
+                    const childPrompt = `You are simulating a ${currentScenario.childAge} year old child in a scenario about "${currentScenario.issue}". The scenario description is: "${currentScenario.description}". The conversation so far is:\n${conversationHistory}\nHow would the child respond naturally and realistically to the parent's last message? Keep it concise.`;
+                    const childResponse = await callGeminiAPI(childPrompt);
+
+                    if (childResponse) {
+                        appendMessage('child', childResponse);
+                        interactions.push({ role: 'child', text: childResponse });
+                        currentTurn++;
+
+                        if (currentTurn >= maxTurns) {
+                            endScenarioBtn.classList.remove('hidden');
+                            sendResponseBtn.disabled = true;
+                            parentResponseInput.disabled = true;
+                            startVoiceInputBtn.disabled = true;
+                        }
+                    } else {
+                        chatError.textContent = "Failed to get child's response. Please try again.";
+                        chatError.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    chatError.textContent = "Error during chat simulation: " + err.message;
+                    chatError.classList.remove('hidden');
+                } finally {
+                    chatStatus.classList.add('hidden');
+                    if (currentTurn < maxTurns) {
+                        sendResponseBtn.disabled = false;
+                        parentResponseInput.disabled = false;
+                        startVoiceInputBtn.disabled = false;
+                        parentResponseInput.focus();
+                    }
+                }
+            };
+
+            sendResponseBtn.addEventListener('click', handleSendResponse);
+            parentResponseInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !sendResponseBtn.disabled) {
+                    handleSendResponse();
+                }
+            });
+
+            endScenarioBtn.addEventListener('click', async () => {
+                chatStatus.textContent = "Generating feedback...";
+                chatStatus.classList.remove('hidden');
+                endScenarioBtn.disabled = true;
+                parentResponseInput.disabled = true;
+                sendResponseBtn.disabled = true;
+                startVoiceInputBtn.disabled = true;
+
+                const conversationSummary = interactions.map(i => `${i.role}: ${i.text}`).join('\n');
+                const feedbackPrompt = `Analyze the following parent-child interaction in the context of a child psychology simulation. The scenario was about "${currentScenario.issue}" with a ${currentScenario.childAge} year old child. Provide constructive feedback for the parent on their communication, empathy, boundary setting, and problem-solving approach. Suggest 1-2 alternative, more effective responses for key moments. Focus on positive parenting principles relevant to Indian context. Provide the output as a JSON object with the following structure:
+                {
+                    "summary": "Overall summary of parent's performance.",
+                    "strengths": ["List of strengths"],
+                    "areasForGrowth": ["List of areas for improvement"],
+                    "actionableTips": ["List of actionable tips/alternative responses"]
+                }
+                Keep the feedback concise and actionable.`;
+
+                try {
+                    const feedbackData = await callGeminiAPI(feedbackPrompt, {
+                        type: "OBJECT",
+                        properties: {
+                            summary: { type: "STRING" },
+                            strengths: { type: "ARRAY", items: { type: "STRING" } },
+                            areasForGrowth: { type: "ARRAY", items: { type: "STRING" } },
+                            actionableTips: { type: "ARRAY", items: { type: "STRING" } }
+                        }
+                    });
+
+                    if (feedbackData) {
+                        feedbackSummary.textContent = feedbackData.summary || 'No summary provided.';
+                        
+                        feedbackStrengthsList.innerHTML = '';
+                        (feedbackData.strengths || []).forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            feedbackStrengthsList.appendChild(li);
+                        });
+                        if (feedbackData.strengths.length === 0) feedbackStrengthsList.innerHTML = '<li>No specific strengths identified.</li>';
+
+
+                        feedbackAreasForGrowthList.innerHTML = '';
+                        (feedbackData.areasForGrowth || []).forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            feedbackAreasForGrowthList.appendChild(li);
+                        });
+                        if (feedbackData.areasForGrowth.length === 0) feedbackAreasForGrowthList.innerHTML = '<li>No specific areas for growth identified.</li>';
+
+
+                        feedbackActionableTipsList.innerHTML = '';
+                        (feedbackData.actionableTips || []).forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            feedbackActionableTipsList.appendChild(li);
+                        });
+                        if (feedbackData.actionableTips.length === 0) feedbackActionableTipsList.innerHTML = '<li>No specific actionable tips provided.</li>';
+
+
+                        feedbackModal.classList.remove('hidden');
+
+                        if (window.isFirebaseReady() && window.db && window.getUserId()) {
+                            const sessionLogRef = window.collection(window.db, `artifacts/${window.appId}/public/session_logs`);
+                            try {
+                                await window.addDoc(sessionLogRef, {
+                                    userId: window.getUserId(),
+                                    scenarioId: currentScenario.id,
+                                    scenarioName: currentScenario.name,
+                                    interactions: interactions.map(i => ({ role: i.role, text: i.text.substring(0, 200) })),
+                                    feedback: JSON.stringify(feedbackData), // Store structured feedback
+                                    timestamp: new Date(),
+                                    childAge: currentScenario.childAge,
+                                    issue: currentScenario.issue,
+                                });
+                                console.log("Session log saved to Firestore.");
+                            } catch (logError) {
+                                console.error("Error saving session log to Firestore:", logError);
+                            }
+                        }
+                    } else {
+                        chatError.textContent = "Failed to generate feedback. Please try again.";
+                        chatError.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    chatError.textContent = "Error generating feedback: " + err.message;
+                    chatError.classList.remove('hidden');
+                } finally {
+                    chatStatus.classList.add('hidden');
+                    endScenarioBtn.disabled = false;
+                }
+            });
+
+            const resetScenario = () => {
+                feedbackModal.classList.add('hidden');
+                scenarioPlayer.classList.add('hidden');
+                challengeInput.value = '';
+                parentResponseInput.value = '';
+                currentScenario = null;
+                interactions = [];
+                currentTurn = 0;
+                sendResponseBtn.disabled = false;
+                parentResponseInput.disabled = false;
+                startVoiceInputBtn.disabled = false;
+                endScenarioBtn.classList.add('hidden');
+                generationError.classList.add('hidden');
+                chatError.classList.add('hidden');
+                childAvatar.textContent = '😊';
+            };
+
+            closeFeedbackModalBtn.addEventListener('click', resetScenario);
+            restartScenarioBtn.addEventListener('click', resetScenario);
+        });
+    </script>
+</body>
+</html>
